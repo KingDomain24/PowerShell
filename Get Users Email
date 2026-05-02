@@ -1,0 +1,5 @@
+PS C:\> Get-ADUser -Identity g333 -Server ML -Properties extensionAttribute1 | ft Name,GivenName,Surname,extensionAttribute1
+ 
+Name GivenName Surname extensionAttribute1
+---- --------- ------- -------------------
+g333 Slav      Popov   slav.popov@sunlife.com
