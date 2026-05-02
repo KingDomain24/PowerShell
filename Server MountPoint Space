@@ -1,0 +1,7 @@
+$compname =  "SV66159" # "SV66631S3" # "SV0A2932S1" #\V4P911 "SV66631S5" #"SV69974" #"SV69974" #"SV66631S5" #"SV69974" "SV66631S5"  "SV69974" "SV0A2268S4"
+Get-WmiObject win32_volume -computer $compname | 
+select $compname, name, label, @{Name="Capacity (GB)";Expression={[Math]::round(($_.Capacity/1gB),2)}},
+@{Name="FreeSpace (GB)";Expression={[Math]::round(($_.FreeSpace/1GB),2)}},
+@{Name="FreeSpace (PCT)";Expression={[Math]::round(($_.FreeSpace/$_.Capacity*100),2)}} | Where-Object Name -like "N:\mpdbs001*"
+Sort-Object name | Format-Table -Wrap -AutoSize
+
