@@ -1,0 +1,152 @@
+<# Function: Get-LoggedOnUser
+.Synopsis
+Queries a computer to check for interactive sessions. This script takes approximately 15 mins to run.
+It will output all existing sessions on all the servers from zstats. Afterwhich, you will get a list of
+servers that you're logged into.
+
+.DESCRIPTION
+This script takes the output from the quser program and parses this to PowerShell objects
+
+.NOTES   
+Name: Get-LoggedOnUser
+Author: Jaap Brasser
+Version: 1.2.1
+DateUpdated: 2015-09-23
+
+.LINK
+http://www.jaapbrasser.com
+
+.PARAMETER ComputerName
+The string or array of string for which a query will be executed
+
+.EXAMPLE
+.\Get-LoggedOnUser.ps1 -ComputerName server01,server02
+
+Description:
+Will display the session information on server01 and server02
+
+.EXAMPLE
+'server01','server02' | .\Get-LoggedOnUser.ps1
+
+Description:
+Will display the session information on server01 and server02
+#>
+function Get-LoggedOnUser {
+    param(
+        [CmdletBinding()] 
+        [Parameter(ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true)]
+        [string[]]$ComputerName = 'localhost'
+    )
+    begin {
+        $ErrorActionPreference = 'Stop'
+    }
+
+    process {
+        foreach ($Computer in $ComputerName) {
+            try {
+                quser /server:$Computer 2>&1 | Select-Object -Skip 1 | ForEach-Object {
+                    $CurrentLine = $_.Trim() -Replace '\s+', ' ' -Split '\s'
+                    $HashProps = @{
+                        UserName     = $CurrentLine[0]
+                        ComputerName = $Computer
+                    }
+
+                    # If session is disconnected different fields will be selected
+                    if ($CurrentLine[2] -eq 'Disc') {
+                        $HashProps.SessionName = $null
+                        $HashProps.Id = $CurrentLine[1]
+                        $HashProps.State = $CurrentLine[2]
+                        $HashProps.IdleTime = $CurrentLine[3]
+                        $HashProps.LogonTime = $CurrentLine[4..6] -join ' '
+                        $HashProps.LogonTime = $CurrentLine[4..($CurrentLine.GetUpperBound(0))] -join ' '
+                    }
+                    else {
+                        $HashProps.SessionName = $CurrentLine[1]
+                        $HashProps.Id = $CurrentLine[2]
+                        $HashProps.State = $CurrentLine[3]
+                        $HashProps.IdleTime = $CurrentLine[4]
+                        $HashProps.LogonTime = $CurrentLine[5..($CurrentLine.GetUpperBound(0))] -join ' '
+                    }
+
+                    New-Object -TypeName PSCustomObject -Property $HashProps |
+                    Select-Object -Property UserName, ComputerName, SessionName, Id, State, IdleTime, LogonTime, Error
+                }
+            }
+            catch {
+                New-Object -TypeName PSCustomObject -Property @{
+                    ComputerName = $Computer
+                    Error        = $_.Exception.Message
+                } | Select-Object -Property UserName, ComputerName, SessionName, Id, State, IdleTime, LogonTime, Error
+            }
+        }
+    }
+}
+
+
+
+#Clear
+### Find your RDP sessions before changing SU password ###
+
+# Run PS under your SU account
+
+
+# First you need to get server list. I usually use one of 2 options:
+
+# Getting server list from Windows Clipboard
+# Copy/paste below code into you PS session or include it in your PS profile
+Add-Type -Assembly PresentationCore
+Function Get-ClipboardArray() {
+    $x = [Windows.Clipboard]::GetText()
+    $x = $x.Split([Environment]::NewLine, [StringSplitOptions]::RemoveEmptyEntries)
+    return , $x
+}
+
+# put this line into PS but do not hit Enter yet, copy your list of servers from a grid or text into clipboard, then execute (hit Enter)
+$servers = Get-ClipboardArray
+
+
+# Getting server list from zstats
+# Here I borrowed Danny's query that he wrote to run "QWINSTA.EXE /SERVER:". Thank you Danny.
+$query = @'
+SELECT 
+CASE When DomainName is not NULL then ClusterNodeName+'.'+DomainName
+                                 ELSE ClusterNodeName
+END AS SERVER
+from zsqdbastats.dbo.dbacluster c
+   , zsqdbastats.dbo.dbaclusternode n
+   , zsqdbastats.dbo.ActiveSQLServer_v s
+where c.clustername = n.clustername 
+and c.ExcludeInd is null
+and c.ClusterName = s.ClusterName
+UNION 
+SELECT 
+CASE When DomainName is not NULL then ServerName+'.'+DomainName
+                                 ELSE ServerName
+END AS SERVER
+from zsqdbastats.dbo.ActiveSQLServer_v  
+WHERE (clusterName is NULL or clusterName = '')
+order by 1
+'@
+
+# US servers
+#$servers = (Invoke-Sqlcmd -ServerInstance AGN9UA49381PL.Sunlifecorp.com,54938 -Query $query).SERVER
+
+# CA servers
+$servers = (Invoke-Sqlcmd -ServerInstance SV0A2956S1.sunlifecorp.com\V2P923 -Query $query).SERVER
+
+
+## To validate server list, if you wish; uncomment if you want the servers list to be output
+#$servers.Count
+#$servers
+
+$myUser = [Environment]::UserName
+Write-Output "Checking sessions for: $myUser"
+
+Get-LoggedOnUser -ComputerName $servers -OutVariable sessions
+#$sessions.Count
+#$sessions | Format-Table -AutoSize
+
+# Filter YOUR ID - the last line to contain your acf2 ID
+Write-Output "If you have any open sessions, they will be listed below:"
+$sessions | where { $_.UserName -eq $myUser } | Format-Table -AutoSize
