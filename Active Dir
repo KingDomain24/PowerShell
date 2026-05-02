@@ -1,0 +1,10 @@
+setspn (u or c flags)
+ 
+C:\Users\m927>setspn -U -L SLFCORP\sqCL0A7743HCADCM1S
+Registered ServicePrincipalNames for CN=sqCL0A7743HCADCM1S,OU=Services,OU=UserAccounts,DC=sunlifecorp,DC=com:
+        MSSQLSvc/CL0A7741.sunlifecorp.com:50122
+        MSSQLSvc/CL0A7741.sunlifecorp.com:HCADMC1S
+ 
+C:\Users\m927>setspn -U -L SLFCORP\MGMGRPRD
+FindDomainForAccount: Call to DsGetDcNameWithAccountW failed with return value 0x00000525
+Could not find account MGMGRPRD
