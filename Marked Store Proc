@@ -1,0 +1,33 @@
+$server = 'SV0A2394S5\HNIC05S'
+$dbname = 'AsiaStagingSTG'
+ 
+ 
+$query = "SELECT
+            ROW_NUMBER() OVER (ORDER BY S.Name, P.Name) AS RowID,
+            S.Name AS SchemaName,
+           -- P.Name AS ProcedureName, '[' + S.Name + ']' + '.' + '[' + P.name + ']' AS ProcedureToDrop,
+           (S.Name +  '.' + P.Name) as procName
+            FROM
+            sys.procedures P
+            INNER JOIN sys.schemas S ON P.schema_id = S.schema_id"
+ 
+           # /*WHERE     P.[name] LIKE '%_DELETE'*/ "
+  $queryResult = (Invoke-Sqlcmd -ServerInstance $server -Database $dbname -Query $query  -ErrorAction Stop |  Select procName )
+ 
+  
+
+ 
+ 
+  # Write-host "DB names"
+#$queryResult.procName
+ 
+$s = new-object microsoft.sqlserver.management.smo.server $server;
+ 
+ 
+$db = $s.Databases[$dbname];
+foreach ($proc in $db.StoredProcedures | where {$_.IsSystemObject -eq $false}) {
+   $spname=$proc.Schema+"."+$proc.Name
+   # if ( $queryResult.procName  -contains $spname ) {
+    Write-host $spname $proc.Name
+    $proc.script()|out-file C:\ReferenceInfo\asiaStaging\STAGE\20241128\$spname.sql UTF8
+    }
