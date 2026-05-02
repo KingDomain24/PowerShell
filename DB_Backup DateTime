@@ -1,0 +1,6 @@
+[System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SMO") | Out-Null
+[System.Reflection.Assembly]::LoadWithPartialName("Microsoft.SqlServer.SmoExtended") | Out-Null
+$SQLInst = New-Object "Microsoft.SqlServer.Management.Smo.Server" "CL0A2098\V2R904"
+$Global:BackupFolder  = $SQLInst.Settings.backupdirectory
+$DBBackUPInfo = $SQLInst.Databases | select name, recoverymodel, lastbackupdate, lastlogbackupdate, LastDifferentialBackupDate, AvailabilityGroupName, Status  | where-object {$_.Name -eq "KosiDatabase"}
+$DBBackUPInfo
