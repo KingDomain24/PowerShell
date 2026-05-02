@@ -1,0 +1,55 @@
+cls
+# Specify the remote computer name here
+$ComputerName = "CL0A4736"+".sunlifecorp.com"
+
+Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+    # Get all disk information on the remote machine
+    $disks = Get-Disk
+
+    # Create an empty array to store the results
+    $diskMapping = @()
+
+    foreach ($disk in $disks) {
+        # Get the partition associated with this disk
+        $partition = Get-Partition -DiskNumber $disk.Number | Where-Object { $_.Type -ne 'Reserved' } | Select-Object -First 1
+
+        # Get the volume associated with this partition
+        $volume = if ($partition) { Get-Volume -Partition $partition } else { $null }
+
+        # Parse the FileSystemLabel
+        $fullLabel = if ($volume -and $volume.FileSystemLabel) { $volume.FileSystemLabel } else { "Unformatted" }
+        $labelParts = $fullLabel.Split('_', 2)
+
+        # Process the DriveLetter part
+        $driveLetter = if ($labelParts.Count -gt 1) { 
+            $driveInfo = $labelParts[1]
+            if ($driveInfo -like "*_SAN") {
+                $driveInfo -replace "_SAN", ":\"
+            } elseif ($driveInfo.Length -eq 1) {
+                $driveInfo + ":\"
+            } else {
+                $driveInfo -replace "_", ":\"
+            }
+        } else { 
+            "N/A" 
+        }
+
+        # Remove everything after the underscore in the SerialNumber
+        $volumeName = $disk.SerialNumber -replace '_.*$', ''
+
+        # Create a custom object
+        $diskInfo = [PSCustomObject]@{
+            DiskNumber   = $disk.Number
+            DriveLetter  = $driveLetter
+            VolumeName   = $volumeName
+            ServerName   = if ($labelParts.Count -gt 0) { $labelParts[0] } else { $fullLabel }
+            SizeGB       = [math]::Round($disk.Size / 1GB, 2)
+            FriendlyName = $disk.FriendlyName
+        }
+
+        $diskMapping += $diskInfo
+    }
+
+    # Return the results to the local session
+    return $diskMapping
+} | Sort-Object DriveLetter | Format-Table -AutoSize
